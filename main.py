@@ -83,27 +83,31 @@ def run_pipeline() -> None:
         print("[Scheduler] No RSS entry found.")
         return
 
+    # Extract clean variables to prevent string formatting bugs
+    article_title = entry.get("title", "")
+    article_link = entry.get("link", "")
+
     # Check for duplicate entry
     seen_articles = load_seen_articles()
-    if entry["link"] in seen_articles:
-        print(f"[Scheduler] Article already processed, skipping: {entry['title']}")
+    if article_link in seen_articles:
+        print(f"[Scheduler] Article already processed, skipping: {article_title}")
         return
 
-    print(f"[Scheduler] Processing new article: {entry['title']}")
-    ai_summary = summarize_article(entry["title"], entry["summary"])
+    print(f"[Scheduler] Processing new article: {article_title}")
+    ai_summary = summarize_article(article_title, entry.get("summary", ""))
 
-    # Format Telegram HTML message
+    # Format Telegram HTML message cleanly
     telegram_msg = (
-        f"**📰 {entry['title']}**\n\n"
+        f"**📰 {article_title}**\n\n"
         f"{ai_summary}\n\n"
-        f"🔗 [Read Full Article]({entry})"
+        f"🔗 [Read Full Article](\"{article_link}\")"
     )
 
     print("[Scheduler] Sending report to Telegram...")
     success = send_telegram_message(telegram_msg)
 
     if success:
-        save_seen_article(entry["link"])
+        save_seen_article(article_link)
         print("[Scheduler] Pipeline executed successfully and link saved!")
     else:
         print("[Scheduler] Failed to deliver Telegram message.")
