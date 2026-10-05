@@ -1,5 +1,7 @@
 import os
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -14,6 +16,25 @@ load_dotenv()
 
 # Initialize Gemini client
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    """Simple HTTP Request Handler for Render Free Tier Web Service health check."""
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"OK - AI Automation Pipeline is Running!")
+
+
+def start_health_check_server() -> None:
+    """Starts a lightweight HTTP server on the port assigned by Render."""
+    port = int(os.getenv("PORT", 8080))
+    server_address = ("0.0.0.0", port)
+    httpd = HTTPServer(server_address, HealthCheckHandler)
+    print(f"[HTTP Server] Health check server running on port {port}")
+    httpd.serve_forever()
 
 
 def summarize_article(title: str, summary: str) -> str:
@@ -73,9 +94,9 @@ def run_pipeline() -> None:
 
     # Format Telegram HTML message
     telegram_msg = (
-        f"<b>📰 {entry['title']}</b>\n\n"
+        f"**📰 {entry['title']}**\n\n"
         f"{ai_summary}\n\n"
-        f"🔗 <a href='{entry['link']}'>Read Full Article</a>"
+        f"🔗 [Read Full Article]({entry})"
     )
 
     print("[Scheduler] Sending report to Telegram...")
@@ -89,8 +110,12 @@ def run_pipeline() -> None:
 
 
 if __name__ == "__main__":
+    # Start health check HTTP server in a background thread for Render Web Service
+    http_thread = threading.Thread(target=start_health_check_server, daemon=True)
+    http_thread.start()
+
     print("=== Starting RSS Automation Pipeline Service ===")
-    
+
     # Run once immediately on start
     run_pipeline()
 
